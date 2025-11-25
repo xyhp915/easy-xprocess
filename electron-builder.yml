@@ -1,0 +1,14 @@
+appId: com.example.processlauncher
+productName: ProcessLauncher
+files:
+  - dist/main
+  - dist/preload
+  - dist/renderer
+  - node_modules/node-pty/**/*
+asar: false
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.utilities
+
