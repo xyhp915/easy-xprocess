@@ -8,6 +8,7 @@ const isDev = process.env.VITE_DEV_SERVER_URL !== undefined
 let mainWindow: BrowserWindow | null = null
 let tray = null
 const manager = new ProcessManager()
+let isQuitting = false
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -27,12 +28,21 @@ function createMainWindow() {
   const startUrl = isDev && process.env.VITE_DEV_SERVER_URL
     ? process.env.VITE_DEV_SERVER_URL
     : new URL('../renderer/index.html', `file://${__dirname}/`).toString()
+
   mainWindow.loadURL(startUrl)
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
-    if (isDev) {
-      mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    // if (isDev) {
+    //   mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    // }
+  })
+
+  // 在macOS下，关闭窗口时隐藏而不是退出
+  mainWindow.on('close', (event) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
     }
   })
 
@@ -57,4 +67,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
 })

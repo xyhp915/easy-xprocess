@@ -84,6 +84,8 @@ function App () {
           convertEol: true,
           fontFamily: 'JetBrains Mono, ui-monospace, monospace',
           cursorBlink: true,
+          rows: 12,
+          scrollback: 1000,
           theme: {
             background: '#0f172a',
             foreground: '#e2e8f0',
@@ -161,9 +163,11 @@ function App () {
         </div>
         <div className="space-y-3">
           {processes.map((proc) => (
-              <div key={proc.id}>
+              <div key={proc.id} className="relative">
                 <div
-                    className="bg-slate-800 p-4 rounded flex justify-between items-center cursor-pointer active:opacity-70 select-none"
+                    className={`bg-slate-800 p-4 ${expanded[proc.id]
+                        ? 'rounded-t'
+                        : 'rounded'} flex justify-between items-center cursor-pointer active:opacity-70 select-none`}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).tagName === 'BUTTON') {
                         // if restart/stop button clicked, force log visible
@@ -177,9 +181,17 @@ function App () {
                       toggleLogs(proc.id)
                     }}
                 >
-                  <div>
-                    <div className="font-semibold">{proc.command}</div>
-                    <div className="text-sm text-slate-400">PID: {proc.pid ?? 'N/A'} • {proc.status}</div>
+                  <div className="flex items-center gap-3">
+                    {proc.status === 'running' && (
+                        <div className="relative">
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                          <div className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75"></div>
+                        </div>
+                    )}
+                    <div>
+                      <div className="font-semibold">{proc.command}</div>
+                      <div className="text-sm text-slate-400">PID: {proc.pid ?? 'N/A'} • {proc.status}</div>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button className="px-3 py-1 bg-rose-600 rounded" onClick={() => stopProcess(proc.id)}>
@@ -201,7 +213,7 @@ function App () {
                 {expanded[proc.id] && (
                     <div
                         id={`terminal-${proc.id}`}
-                        className="mt-3 bg-slate-900 rounded p-3 text-sm font-mono"
+                        className="bg-slate-900 rounded-b p-3 text-sm font-mono overflow-hidden"
                         style={{ height: '240px' }}
                     />
                 )}

@@ -22,6 +22,7 @@ export class ProcessManager extends EventEmitter {
   private processes = new Map<string, pty.IPty>()
   private infos = new Map<string, ProcessInfo>()
   private logBuffers = new Map<string, ProcessLogEntry[]>()
+  private intentionallyStopped = new Set<string>()
   private readonly maxLogEntries = 500
 
   private launchProcess(info: ProcessInfo) {
@@ -50,7 +51,14 @@ export class ProcessManager extends EventEmitter {
     })
 
     ptyProcess.onExit(({ exitCode, signal }) => {
-      info.status = exitCode === 0 && signal === undefined ? 'stopped' : 'error'
+      // 如果是主动停止的进程，状态设为stopped
+      if (this.intentionallyStopped.has(info.id)) {
+        info.status = 'stopped'
+        this.intentionallyStopped.delete(info.id)
+      } else {
+        // 否则根据退出码判断
+        info.status = exitCode === 0 && signal === undefined ? 'stopped' : 'error'
+      }
       this.emit('exit', { id: info.id, code: exitCode, signal })
       this.cleanup(info.id)
     })
@@ -96,10 +104,13 @@ export class ProcessManager extends EventEmitter {
     const proc = this.processes.get(id)
     if (!proc) return false
     try {
+      // 标记为主动停止
+      this.intentionallyStopped.add(id)
       proc.kill()
       return true
     } catch (err) {
       console.error(`Failed to kill process ${id}:`, err)
+      this.intentionallyStopped.delete(id)
       return false
     }
   }
@@ -127,14 +138,19 @@ export class ProcessManager extends EventEmitter {
     const proc = this.processes.get(id)
     if (proc) {
       try {
+        // 标记为主动停止
+        this.intentionallyStopped.add(id)
         proc.kill()
       } catch (err) {
         console.error(`Failed to kill process ${id}:`, err)
+        this.intentionallyStopped.delete(id)
       }
       this.processes.delete(id)
     }
     const removedInfo = this.infos.delete(id)
     const removedLogs = this.logBuffers.delete(id)
+    // 清理标志
+    this.intentionallyStopped.delete(id)
     if (proc || removedInfo || removedLogs) {
       this.emitListUpdate()
     }
