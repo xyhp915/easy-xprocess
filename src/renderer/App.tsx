@@ -26,7 +26,9 @@ function App () {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValues, setEditingValues] = useState<Record<string, ProcessFormValues>>({})
   const [, setTick] = useState(0) // 用于触发组件重新渲染以更新运行时长
+  const [runningHooks, setRunningHooks] = useState<Record<string, { hookName: string; hookKey: string }>>({}) // 记录正在执行的钩子
   const terminals = useRef<Record<string, Terminal>>({})
+  const hookKeysRef = useRef<Record<string, string>>({}) // 保存 hookKey 的引用，用于终端输入
   const logHandler = useMemo(() => (_event: unknown, payload: ProcessLogEntry) => {
     const term = terminals.current[payload.id]
     if (!term) return
@@ -141,8 +143,16 @@ function App () {
         terminals.current[id] = term
 
         // 启用输入功能 - 当用户在终端中输入时，发送到进程的 stdin
+        // 如果有钩子正在运行，则发送到钩子进程
         term.onData((data) => {
-          window.processAPI.writeInput(id, data)
+          const hookKey = hookKeysRef.current[id]
+          if (hookKey) {
+            // 如果有钩子正在执行，发送到钩子进程
+            window.processAPI.writeHookInput(hookKey, data)
+          } else {
+            // 否则发送到主进程
+            window.processAPI.writeInput(id, data)
+          }
         })
 
         const history = await window.processAPI.getLogs(id)
@@ -157,8 +167,24 @@ function App () {
   useEffect(() => {
     window.processAPI.list().then((data) => setProcesses(data))
     const unsubscribe = window.processAPI.onLogs(logHandler)
+    const unsubscribeHookStart = window.processAPI.onHookStart((_event, payload) => {
+      console.log('Hook started:', payload)
+      setRunningHooks((prev) => ({ ...prev, [payload.id]: { hookName: payload.hookName, hookKey: payload.hookKey } }))
+      hookKeysRef.current[payload.id] = payload.hookKey
+    })
+    const unsubscribeHookEnd = window.processAPI.onHookEnd((_event, payload) => {
+      console.log('Hook ended:', payload)
+      setRunningHooks((prev) => {
+        const next = { ...prev }
+        delete next[payload.id]
+        return next
+      })
+      delete hookKeysRef.current[payload.id]
+    })
     return () => {
       unsubscribe()
+      unsubscribeHookStart()
+      unsubscribeHookEnd()
       Object.values(terminals.current).forEach((term) => term.dispose())
       terminals.current = {}
     }
@@ -249,6 +275,13 @@ function App () {
                                   className="absolute inset-0 w-3 h-3 bg-green-500 rounded-full animate-ping opacity-75"></div>
                             </div>
                         )}
+                        {runningHooks[proc.id] && (
+                            <div className="relative">
+                              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                              <div
+                                  className="absolute inset-0 w-3 h-3 bg-yellow-500 rounded-full animate-ping opacity-75"></div>
+                            </div>
+                        )}
                         <div>
                           <div className="flex items-center gap-2">
                             <strong className={'font-semibold'}>
@@ -257,6 +290,11 @@ function App () {
                             <span className={'text-xs text-slate-400 font-[500] pt-[1px]'}>
                               {proc.args?.join(' ')}
                             </span>
+                            {runningHooks[proc.id] && (
+                                <span className="text-xs text-yellow-400 font-semibold bg-yellow-900/30 px-2 py-0.5 rounded">
+                                  [{runningHooks[proc.id].hookName}] Running...
+                                </span>
+                            )}
                           </div>
                           <div className="text-sm text-slate-400">
                             PID: {proc.pid ?? 'N/A'} • {proc.status}

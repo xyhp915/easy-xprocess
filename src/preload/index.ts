@@ -9,6 +9,7 @@ const api = {
   restart: (id: string) => ipcRenderer.invoke('process:restart', id),
   remove: (id: string) => ipcRenderer.invoke('process:remove', id),
   writeInput: (id: string, data: string) => ipcRenderer.invoke('process:input', { id, data }),
+  writeHookInput: (hookKey: string, data: string) => ipcRenderer.invoke('process:hook:input', { hookKey, data }),
   getLogs: (id: string) => ipcRenderer.invoke('process:logs:get', id) as Promise<ProcessLogEntry[]>,
   onLogs: (handler: (event: Electron.IpcRendererEvent, payload: ProcessLogEntry) => void) => {
     ipcRenderer.on('process:logs:push', handler)
@@ -17,6 +18,14 @@ const api = {
   onProcessList: (handler: (event: Electron.IpcRendererEvent, payload: ProcessInfo[]) => void) => {
     ipcRenderer.on('process:list:update', handler)
     return () => ipcRenderer.off('process:list:update', handler)
+  },
+  onHookStart: (handler: (event: Electron.IpcRendererEvent, payload: { id: string; hookName: string; hookKey: string }) => void) => {
+    ipcRenderer.on('process:hook:start', handler)
+    return () => ipcRenderer.off('process:hook:start', handler)
+  },
+  onHookEnd: (handler: (event: Electron.IpcRendererEvent, payload: { id: string; hookName: string; hookKey: string; exitCode: number }) => void) => {
+    ipcRenderer.on('process:hook:end', handler)
+    return () => ipcRenderer.off('process:hook:end', handler)
   },
   update: (id: string, command: string, args: string[] = [], beforeStop?: string, afterStop?: string) =>
     ipcRenderer.invoke('process:update', { id, command, args, beforeStop, afterStop }),

@@ -7,6 +7,9 @@ export function createTray(mainWindowProvider: () => BrowserWindow | null, proce
   const iconPath = path.join(__dirname, '../assets', 'tray.png')
   const trayImage = nativeImage.createFromPath(iconPath)
 
+  // 在 macOS 上使用模板图标以支持暗黑模式
+  trayImage.setTemplateImage(true)
+
   const tray = new Tray(trayImage)
 
   // 构建菜单的函数

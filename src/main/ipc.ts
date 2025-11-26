@@ -34,6 +34,9 @@ export function registerIPC(ipcMain: IpcMain, manager: ProcessManager) {
   ipcMain.handle('process:input', (_event, args: { id: string; data: string }) => {
     return manager.writeInput(args.id, args.data)
   })
+  ipcMain.handle('process:hook:input', (_event, args: { hookKey: string; data: string }) => {
+    return manager.writeHookInput(args.hookKey, args.data)
+  })
   ipcMain.handle('process:update', (_event, args: {
     id: string;
     command: string;
@@ -46,6 +49,14 @@ export function registerIPC(ipcMain: IpcMain, manager: ProcessManager) {
 
   manager.on('log', (payload) => {
     sendToAllWindows('process:logs:push', payload)
+  })
+
+  manager.on('hook:start', (payload) => {
+    sendToAllWindows('process:hook:start', payload)
+  })
+
+  manager.on('hook:end', (payload) => {
+    sendToAllWindows('process:hook:end', payload)
   })
 
   manager.on('list:update', broadcastProcessList)

@@ -7,7 +7,7 @@ import { createTray } from './tray'
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined
 let mainWindow: BrowserWindow | null = null
 let tray = null
-const manager = new ProcessManager()
+let manager: ProcessManager
 let isQuitting = false
 
 function createMainWindow() {
@@ -51,7 +51,10 @@ function createMainWindow() {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const userDataPath = app.getPath('userData')
+  manager = new ProcessManager(userDataPath)
+  await manager.loadFromDisk()
   createMainWindow()
   tray = createTray(() => mainWindow, manager)
   registerIPC(ipcMain, manager)

@@ -1,3 +1,5 @@
+import { promises as fs } from 'fs'
+import * as path from 'path'
 import * as pty from 'node-pty'
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
@@ -27,6 +29,19 @@ export class ProcessManager extends EventEmitter {
   private logBuffers = new Map<string, ProcessLogEntry[]>()
   private intentionallyStopped = new Set<string>()
   private readonly maxLogEntries = 500
+  // 用于存储正在执行的钩子进程
+  private hookProcesses = new Map<string, pty.IPty>()
+  private readonly persistencePath: string
+  private persistTimer?: NodeJS.Timeout
+
+  constructor(userDataPath: string) {
+    super()
+    this.persistencePath = path.join(userDataPath, 'processes.json')
+  }
+
+  private ensurePersistDir() {
+    return fs.mkdir(path.dirname(this.persistencePath), { recursive: true }).catch(() => {})
+  }
 
   private launchProcess(info: ProcessInfo) {
     // 组合命令和参数
@@ -105,9 +120,16 @@ export class ProcessManager extends EventEmitter {
         env: process.env as { [key: string]: string }
       })
 
+      // 将钩子进程保存到 map 中，以便可以接收输入
+      const hookKey = `${id}:${hookName}`
+      this.hookProcesses.set(hookKey, hookProcess)
+
       // 输出钩子开始信息
       const startMsg = `\r\n[${hookName}] Executing: ${hookCommand}\r\n`
       this.appendLog({ id, stream: 'stdout', chunk: startMsg, timestamp: Date.now() })
+
+      // 通知前端钩子开始执行
+      this.emit('hook:start', { id, hookName, hookKey })
 
       // 收集输出
       hookProcess.onData((data) => {
@@ -117,6 +139,13 @@ export class ProcessManager extends EventEmitter {
       hookProcess.onExit(({ exitCode }) => {
         const endMsg = `\r\n[${hookName}] Completed with exit code: ${exitCode}\r\n`
         this.appendLog({ id, stream: 'stdout', chunk: endMsg, timestamp: Date.now() })
+
+        // 清理钩子进程
+        this.hookProcesses.delete(hookKey)
+
+        // 通知前端钩子执行完成
+        this.emit('hook:end', { id, hookName, hookKey, exitCode })
+
         resolve()
       })
     })
@@ -132,6 +161,7 @@ export class ProcessManager extends EventEmitter {
       afterStop,
     }
     this.infos.set(info.id, info)
+    this.schedulePersist()
     return this.launchProcess(info)
   }
 
@@ -194,6 +224,7 @@ export class ProcessManager extends EventEmitter {
       }
     }
     if (changed) {
+      this.schedulePersist()
       this.emitListUpdate()
     }
   }
@@ -216,6 +247,7 @@ export class ProcessManager extends EventEmitter {
     // 清理标志
     this.intentionallyStopped.delete(id)
     if (proc || removedInfo || removedLogs) {
+      this.schedulePersist()
       this.emitListUpdate()
     }
     return Boolean(proc || removedInfo || removedLogs)
@@ -250,6 +282,19 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
+  writeHookInput(hookKey: string, data: string) {
+    const hookProc = this.hookProcesses.get(hookKey)
+    if (!hookProc) return false
+
+    try {
+      hookProc.write(data)
+      return true
+    } catch (err) {
+      console.error(`Failed to write to hook process ${hookKey}:`, err)
+      return false
+    }
+  }
+
   update(id: string, command: string, args: string[] = [], beforeStop?: string, afterStop?: string) {
     const info = this.infos.get(id)
     if (!info) return false
@@ -268,7 +313,57 @@ export class ProcessManager extends EventEmitter {
     //   return this.launchProcess(info)
     // }
 
+    this.schedulePersist()
     this.emitListUpdate()
     return info
+  }
+
+  private schedulePersist() {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer)
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined
+      this.persistToDisk().catch((err) => {
+        console.error('Failed to persist process list:', err)
+      })
+    }, 300)
+  }
+
+  private async persistToDisk() {
+    await this.ensurePersistDir()
+    const data = Array.from(this.infos.values()).map((info) => {
+      const { id, command, args, beforeStop, afterStop } = info
+      return { id, command, args, beforeStop, afterStop }
+    })
+    await fs.writeFile(this.persistencePath, JSON.stringify({ version: 1, processes: data }, null, 2), 'utf-8')
+  }
+
+  async loadFromDisk() {
+    try {
+      const raw = await fs.readFile(this.persistencePath, 'utf-8')
+      const parsed = JSON.parse(raw)
+      const processes = parsed?.processes ?? []
+      processes.forEach((proc: any) => {
+        if (!proc.id) {
+          proc.id = randomUUID()
+        }
+        const info: ProcessInfo = {
+          id: proc.id,
+          command: proc.command,
+          args: Array.isArray(proc.args) ? proc.args : [],
+          status: 'stopped',
+          beforeStop: proc.beforeStop,
+          afterStop: proc.afterStop,
+        }
+        this.infos.set(info.id, info)
+      })
+      this.emitListUpdate()
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') {
+        return
+      }
+      console.error('Failed to load processes:', err)
+    }
   }
 }
