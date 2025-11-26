@@ -8,6 +8,7 @@ interface ProcessInfo {
   args: string[];
   status: 'running' | 'stopped' | 'error';
   pid?: number;
+  startTime?: number;
 }
 
 interface ProcessLogEntry {
@@ -17,11 +18,33 @@ interface ProcessLogEntry {
   timestamp: number
 }
 
+// 格式化运行时长
+function formatUptime(startTime: number | undefined): string {
+  if (!startTime) return 'N/A'
+
+  const uptimeMs = Date.now() - startTime
+  const seconds = Math.floor(uptimeMs / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h`
+  } else if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`
+  } else {
+    return `${seconds}s`
+  }
+}
+
 function App () {
   const [processes, setProcesses] = useState<ProcessInfo[]>([])
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [, setTick] = useState(0) // 用于触发组件重新渲染以更新运行时长
   const terminals = useRef<Record<string, Terminal>>({})
   const logHandler = useMemo(() => (_event: unknown, payload: ProcessLogEntry) => {
     const term = terminals.current[payload.id]
@@ -139,6 +162,18 @@ function App () {
     }
   }, [])
 
+  // 每秒更新一次运行时长显示
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // 只在有运行中的进程时才更新
+      if (processes.some(p => p.status === 'running')) {
+        setTick(t => t + 1)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [processes])
+
   return (
       <div className="min-h-screen p-6">
         <h1 className="text-2xl font-bold mb-4">Process Launcher</h1>
@@ -190,7 +225,12 @@ function App () {
                     )}
                     <div>
                       <div className="font-semibold">{proc.command}</div>
-                      <div className="text-sm text-slate-400">PID: {proc.pid ?? 'N/A'} • {proc.status}</div>
+                      <div className="text-sm text-slate-400">
+                        PID: {proc.pid ?? 'N/A'} • {proc.status}
+                        {proc.status === 'running' && proc.startTime && (
+                          <> • Uptime: {formatUptime(proc.startTime)}</>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2">

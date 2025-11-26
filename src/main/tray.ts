@@ -2,6 +2,27 @@ import { BrowserWindow, Menu, Tray, app, nativeImage } from 'electron'
 import path from 'path'
 import { ProcessManager } from './processManager'
 
+// 格式化运行时长
+function formatUptime(startTime: number | undefined): string {
+  if (!startTime) return 'N/A'
+
+  const uptimeMs = Date.now() - startTime
+  const seconds = Math.floor(uptimeMs / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h`
+  } else if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`
+  } else {
+    return `${seconds}s`
+  }
+}
+
 export function createTray(mainWindowProvider: () => BrowserWindow | null, processManager?: ProcessManager) {
   const iconPath = path.join(__dirname, '../assets', 'tray.png')
   const trayImage = nativeImage.createFromPath(iconPath)
@@ -37,6 +58,7 @@ export function createTray(mainWindowProvider: () => BrowserWindow | null, proce
         runningProcesses.forEach(process => {
           const label = `${process.command} ${process.args.join(' ')}`.trim()
           const displayLabel = label.length > 50 ? label.substring(0, 47) + '...' : label
+          const uptime = formatUptime(process.startTime)
 
           menuItems.push({
             label: `▶ ${displayLabel}`,
@@ -45,6 +67,11 @@ export function createTray(mainWindowProvider: () => BrowserWindow | null, proce
                 label: `PID: ${process.pid || 'N/A'}`,
                 enabled: false,
               },
+              {
+                label: `Uptime: ${uptime}`,
+                enabled: false,
+              },
+              { type: 'separator' },
               {
                 label: 'Stop Process',
                 click: () => {
@@ -82,6 +109,21 @@ export function createTray(mainWindowProvider: () => BrowserWindow | null, proce
   if (processManager) {
     processManager.on('list:update', () => {
       tray.setContextMenu(buildMenu())
+    })
+
+    // 每秒更新一次菜单以刷新运行时长
+    // 只在有运行中的进程时才更新
+    const updateInterval = setInterval(() => {
+      const processes = processManager.list()
+      const hasRunningProcesses = processes.some(p => p.status === 'running')
+      if (hasRunningProcesses) {
+        tray.setContextMenu(buildMenu())
+      }
+    }, 1000)
+
+    // 当应用退出时清理定时器
+    app.on('will-quit', () => {
+      clearInterval(updateInterval)
     })
   }
 

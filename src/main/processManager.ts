@@ -9,6 +9,7 @@ export interface ProcessInfo {
   args: string[];
   status: 'running' | 'stopped' | 'error';
   pid?: number;
+  startTime?: number;
 }
 
 export interface ProcessLogEntry {
@@ -42,6 +43,7 @@ export class ProcessManager extends EventEmitter {
     this.processes.set(info.id, ptyProcess)
     info.status = 'running'
     info.pid = ptyProcess.pid
+    info.startTime = Date.now()
     this.logBuffers.set(info.id, [])
     this.emitListUpdate()
 
