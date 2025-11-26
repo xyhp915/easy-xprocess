@@ -53,7 +53,7 @@ function createMainWindow() {
 
 app.whenReady().then(() => {
   createMainWindow()
-  tray = createTray(() => mainWindow)
+  tray = createTray(() => mainWindow, manager)
   registerIPC(ipcMain, manager)
 
   app.on('activate', () => {
