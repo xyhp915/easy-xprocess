@@ -3,7 +3,8 @@ import type { ProcessInfo, ProcessLogEntry } from '../main/processManager'
 
 const api = {
   list: () => ipcRenderer.invoke('process:list'),
-  start: (command: string, args: string[] = []) => ipcRenderer.invoke('process:start', { command, args }),
+  start: (command: string, args: string[] = [], beforeStop?: string, afterStop?: string) =>
+    ipcRenderer.invoke('process:start', { command, args, beforeStop, afterStop }),
   stop: (id: string) => ipcRenderer.invoke('process:stop', id),
   restart: (id: string) => ipcRenderer.invoke('process:restart', id),
   remove: (id: string) => ipcRenderer.invoke('process:remove', id),

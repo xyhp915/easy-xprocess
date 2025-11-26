@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { formatUptime } from '../shared/utils'
 
 interface ProcessInfo {
   id: string;
@@ -9,6 +10,8 @@ interface ProcessInfo {
   status: 'running' | 'stopped' | 'error';
   pid?: number;
   startTime?: number;
+  beforeStop?: string;
+  afterStop?: string;
 }
 
 interface ProcessLogEntry {
@@ -18,31 +21,12 @@ interface ProcessLogEntry {
   timestamp: number
 }
 
-// 格式化运行时长
-function formatUptime(startTime: number | undefined): string {
-  if (!startTime) return 'N/A'
-
-  const uptimeMs = Date.now() - startTime
-  const seconds = Math.floor(uptimeMs / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-
-  if (days > 0) {
-    return `${days}d ${hours % 24}h`
-  } else if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  } else {
-    return `${seconds}s`
-  }
-}
-
 function App () {
   const [processes, setProcesses] = useState<ProcessInfo[]>([])
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
+  const [beforeStop, setBeforeStop] = useState('')
+  const [afterStop, setAfterStop] = useState('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [, setTick] = useState(0) // 用于触发组件重新渲染以更新运行时长
   const terminals = useRef<Record<string, Terminal>>({})
@@ -55,9 +39,16 @@ function App () {
 
   const startProcess = async () => {
     if (!command) return
-    const newProcess = await window.processAPI.start(command, args.split(' ').filter(Boolean))
+    const newProcess = await window.processAPI.start(
+      command,
+      args.split(' ').filter(Boolean),
+      beforeStop || undefined,
+      afterStop || undefined
+    )
     setCommand('')
     setArgs('')
+    setBeforeStop('')
+    setAfterStop('')
 
     // 自动打开新进程的日志终端
     if (newProcess && newProcess.id) {
@@ -195,6 +186,20 @@ function App () {
               Start Process
             </button>
           </div>
+          <div className="flex gap-4">
+            <input
+                className="flex-1 px-3 py-2 rounded bg-slate-900 text-sm"
+                placeholder="Before Stop Hook (optional)"
+                value={beforeStop}
+                onChange={(e) => setBeforeStop(e.target.value)}
+            />
+            <input
+                className="flex-1 px-3 py-2 rounded bg-slate-900 text-sm"
+                placeholder="After Stop Hook (optional)"
+                value={afterStop}
+                onChange={(e) => setAfterStop(e.target.value)}
+            />
+          </div>
         </div>
         <div className="space-y-3">
           {processes.map((proc) => (
@@ -231,6 +236,16 @@ function App () {
                           <> • Uptime: {formatUptime(proc.startTime)}</>
                         )}
                       </div>
+                      {(proc.beforeStop || proc.afterStop) && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          {proc.beforeStop && (
+                            <div>beforeStop: {proc.beforeStop}</div>
+                          )}
+                          {proc.afterStop && (
+                            <div>afterStop: {proc.afterStop}</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">

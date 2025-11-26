@@ -15,8 +15,8 @@ export function registerIPC(ipcMain: IpcMain, manager: ProcessManager) {
   }
 
   ipcMain.handle('process:list', () => manager.list())
-  ipcMain.handle('process:start', (_event, args: { command: string; args: string[] }) => {
-    return manager.start(args.command, args.args)
+  ipcMain.handle('process:start', (_event, args: { command: string; args: string[]; beforeStop?: string; afterStop?: string }) => {
+    return manager.start(args.command, args.args, args.beforeStop, args.afterStop)
   })
   ipcMain.handle('process:stop', (_event, id: string) => {
     return manager.stop(id)

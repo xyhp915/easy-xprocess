@@ -10,6 +10,8 @@ export interface ProcessInfo {
   status: 'running' | 'stopped' | 'error';
   pid?: number;
   startTime?: number;
+  beforeStop?: string;
+  afterStop?: string;
 }
 
 export interface ProcessLogEntry {
@@ -91,24 +93,84 @@ export class ProcessManager extends EventEmitter {
     this.emit('log', entry)
   }
 
-  start(command: string, args: string[] = []) {
+  // 执行钩子命令
+  private async executeHook(id: string, hookCommand: string, hookName: string): Promise<void> {
+    return new Promise((resolve) => {
+      const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash'
+      const hookProcess = pty.spawn(shell, ['-c', hookCommand], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: process.env.HOME || process.cwd(),
+        env: process.env as { [key: string]: string }
+      })
+
+      // 输出钩子开始信息
+      const startMsg = `\r\n[${hookName}] Executing: ${hookCommand}\r\n`
+      this.appendLog({ id, stream: 'stdout', chunk: startMsg, timestamp: Date.now() })
+
+      // 收集输出
+      hookProcess.onData((data) => {
+        this.appendLog({ id, stream: 'stdout', chunk: data, timestamp: Date.now() })
+      })
+
+      hookProcess.onExit(({ exitCode }) => {
+        const endMsg = `\r\n[${hookName}] Completed with exit code: ${exitCode}\r\n`
+        this.appendLog({ id, stream: 'stdout', chunk: endMsg, timestamp: Date.now() })
+        resolve()
+      })
+    })
+  }
+
+  start(command: string, args: string[] = [], beforeStop?: string, afterStop?: string) {
     const info: ProcessInfo = {
       id: randomUUID(),
       command,
       args,
       status: 'running',
+      beforeStop,
+      afterStop,
     }
     this.infos.set(info.id, info)
     return this.launchProcess(info)
   }
 
-  stop(id: string) {
+  async stop(id: string) {
     const proc = this.processes.get(id)
+    const info = this.infos.get(id)
     if (!proc) return false
+
     try {
+      // 执行 beforeStop 钩子
+      if (info?.beforeStop) {
+        await this.executeHook(id, info.beforeStop, 'beforeStop')
+      }
+
       // 标记为主动停止
       this.intentionallyStopped.add(id)
       proc.kill()
+
+      // 等待进程退出
+      await new Promise<void>((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!this.processes.has(id)) {
+            clearInterval(checkInterval)
+            resolve()
+          }
+        }, 100)
+
+        // 超时保护（5秒）
+        setTimeout(() => {
+          clearInterval(checkInterval)
+          resolve()
+        }, 5000)
+      })
+
+      // 执行 afterStop 钩子
+      if (info?.afterStop) {
+        await this.executeHook(id, info.afterStop, 'afterStop')
+      }
+
       return true
     } catch (err) {
       console.error(`Failed to kill process ${id}:`, err)
