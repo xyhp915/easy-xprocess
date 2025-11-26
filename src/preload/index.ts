@@ -18,6 +18,8 @@ const api = {
     ipcRenderer.on('process:list:update', handler)
     return () => ipcRenderer.off('process:list:update', handler)
   },
+  update: (id: string, command: string, args: string[] = [], beforeStop?: string, afterStop?: string) =>
+    ipcRenderer.invoke('process:update', { id, command, args, beforeStop, afterStop }),
 }
 
 contextBridge.exposeInMainWorld('processAPI', api)

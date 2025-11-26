@@ -249,4 +249,26 @@ export class ProcessManager extends EventEmitter {
       return false
     }
   }
+
+  update(id: string, command: string, args: string[] = [], beforeStop?: string, afterStop?: string) {
+    const info = this.infos.get(id)
+    if (!info) return false
+
+    info.command = command
+    info.args = args
+    info.beforeStop = beforeStop
+    info.afterStop = afterStop
+
+    // TODO: 如果进程正在运行，是否需要重启？
+    // const isRunning = info.status === 'running'
+    //
+    // if (isRunning) {
+    //   this.stop(id)
+    //   this.logBuffers.set(id, [])
+    //   return this.launchProcess(info)
+    // }
+
+    this.emitListUpdate()
+    return info
+  }
 }

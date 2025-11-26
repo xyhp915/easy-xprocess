@@ -15,7 +15,12 @@ export function registerIPC(ipcMain: IpcMain, manager: ProcessManager) {
   }
 
   ipcMain.handle('process:list', () => manager.list())
-  ipcMain.handle('process:start', (_event, args: { command: string; args: string[]; beforeStop?: string; afterStop?: string }) => {
+  ipcMain.handle('process:start', (_event, args: {
+    command: string;
+    args: string[];
+    beforeStop?: string;
+    afterStop?: string
+  }) => {
     return manager.start(args.command, args.args, args.beforeStop, args.afterStop)
   })
   ipcMain.handle('process:stop', (_event, id: string) => {
@@ -28,6 +33,15 @@ export function registerIPC(ipcMain: IpcMain, manager: ProcessManager) {
   ipcMain.handle('process:logs:get', (_event, id: string) => manager.getLogs(id))
   ipcMain.handle('process:input', (_event, args: { id: string; data: string }) => {
     return manager.writeInput(args.id, args.data)
+  })
+  ipcMain.handle('process:update', (_event, args: {
+    id: string;
+    command: string;
+    args: string[];
+    beforeStop?: string;
+    afterStop?: string
+  }) => {
+    return manager.update(args.id, args.command, args.args, args.beforeStop, args.afterStop)
   })
 
   manager.on('log', (payload) => {
