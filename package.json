@@ -10,6 +10,8 @@
     "build:renderer": "electron-vite build && vite build --config vite.config.js",
     "build:main": "electron-vite build --config electron.vite.config.js",
     "build:electron": "electron-builder",
+    "build": "npm run build:renderer && npm run build:main && npm run build:electron",
+    "build:darwin": "export CSC_IDENTITY_AUTO_DISCOVERY=false && npm run build",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint setup'",
     "test": "vitest",
@@ -49,7 +51,7 @@
     "vitest": "^4.0.13"
   },
   "build": {
-    "appId": "com.example.processlauncher",
+    "appId": "com.charlie.processlauncher",
     "productName": "ProcessLauncher",
     "files": [
       "dist/main",
@@ -60,13 +62,13 @@
       }
     ],
     "directories": {
-      "buildResources": "build"
+      "buildResources": "resources"
     },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        "dmg"
       ],
+      "icon": "resources/logo.icns",
       "category": "public.app-category.utilities"
     }
   }

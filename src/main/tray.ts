@@ -2,10 +2,11 @@ import { BrowserWindow, Menu, Tray, app, nativeImage } from 'electron'
 import path from 'path'
 import { ProcessManager } from './processManager'
 import { formatUptime } from '../shared/utils'
+// @ts-ignore
+import trayIcon from '../resources/tray.png?asset'
 
 export function createTray(mainWindowProvider: () => BrowserWindow | null, processManager?: ProcessManager) {
-  const iconPath = path.join(__dirname, '../assets', 'tray.png')
-  const trayImage = nativeImage.createFromPath(iconPath)
+  const trayImage = nativeImage.createFromPath(trayIcon)
 
   // 在 macOS 上使用模板图标以支持暗黑模式
   trayImage.setTemplateImage(true)
